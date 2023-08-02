@@ -8,20 +8,15 @@ import argparse
 # set debug = 3 for STX16--RAE1
 debug=0
 
-if debug == 3:
-  cff_file = "/MetaFusion/EXON_RUNS/outdir-Aug-27-2020/STX16--RAE1.ALL.cff.reann.NO_SEQ.55929088.arriba.1entry" 
-  ensbed="/MetaFusion/test_data/cff_test/ens_known_genes.STX16--RAE1.renamed.bed"
-  ref_fa="/MetaFusion/reference_files/human_g1k_v37_decoy.fasta"
-#PARSER
-else:
-  parser = argparse.ArgumentParser()
-  parser.add_argument('cff_file', action='store', help='CFF file, can be .cff or cff.reann')
-  parser.add_argument('ensbed', action='store', help='Ensemble gene file')
-  parser.add_argument('ref_fa', action='store', help='Reference genome file')
-  args = parser.parse_args()
-  cff_file = args.cff_file
-  ensbed = args.ensbed
-  ref_fa=args.ref_fa
+
+parser = argparse.ArgumentParser()
+parser.add_argument('cff_file', action='store', help='CFF file, can be .cff or cff.reann')
+parser.add_argument('ensbed', action='store', help='Ensemble gene file')
+parser.add_argument('ref_fa', action='store', help='Reference genome file')
+args = parser.parse_args()
+cff_file = args.cff_file
+ensbed = args.ensbed
+ref_fa=args.ref_fa
 
 def choose_closest_exon(exon_list, pos, strand, ori):
     #chooses the closest exon from a list of adjacent exons either upstream (head) or downstream (tail) of the fusion breakpoint
@@ -99,11 +94,3 @@ for line in open(cff_file, "r"):
       fusion.closest_exon2=exon
     else: raise Exception('Strand must be either + or -')
     print fusion.tostring() 
-
-
-#SCRAP
-#print(pygeneann.GeneAnnotation.__genes)
-#print(dir(gene_ann))
-#chr="chr5"
-#print([gene_bed.gene_name for gene_bed in gene_ann._GeneAnnotation__genes[chr]])
-#print(gene_ann._GeneAnnotation__gene_starts[chr])
