@@ -59,6 +59,10 @@ while test $# -gt 0;do
         exons=1
         shift
         ;;
+        --clinical_genes)
+        clinical_genes="$2"
+        shift 2
+        ;;
         *)
         #OTHER_ARGUMENTS+=("$1")
         shift # Remove generic argument from processing
@@ -95,10 +99,10 @@ cff=$outdir/$(basename $cff).renamed
 if [ $annotate -eq 1 ]; then
   if [ $genome_fasta ]; then 
     echo Annotate cff, extract sequence surrounding breakpoint
-    python reann_cff_fusion.py --cff $cff --gene_bed $gene_bed --ref_fa $genome_fasta > $outdir/$(basename $cff).reann.WITH_SEQ
+    python reann_cff_fusion.py --cff $cff --gene_bed $gene_bed --ref_fa $genome_fasta --clinical_genes $clinical_genes > $outdir/$(basename $cff).reann.WITH_SEQ
   else 
     echo Annotate cff, no extraction of sequence surrounding breakpoint
-    python reann_cff_fusion.py --cff $cff --gene_bed $gene_bed > $outdir/$(basename $cff).reann.NO_SEQ
+    python reann_cff_fusion.py --cff $cff --gene_bed $gene_bed --clinical_genes $clinical_genes > $outdir/$(basename $cff).reann.NO_SEQ
   fi
 fi
 # Assign .cff based on SEQ or NOSEQ
