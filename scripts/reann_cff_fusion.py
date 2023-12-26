@@ -12,10 +12,14 @@ parser = argparse.ArgumentParser()
 parser.add_argument('--cff', action='store', help='CFF file, can be .cff or cff.reann')
 parser.add_argument('--gene_bed', action='store', help='Ensemble gene file')
 parser.add_argument('--ref_fa', required=False, action='store', help='Reference genome file')
+parser.add_argument('--clinical_genes', required = True,action='store', help='Clinical Gene Names, genes in this file will return all possible transcript IDs' )
 
 args = parser.parse_args()
 cff_file = args.cff
 ensbed = args.gene_bed
+clinical_file_path = args.clinical_genes
+with open(clinical_file_path,'r') as file:
+   clinical_genes = file.read().splitlines()
 # Assign reference fasta if provided by user
 if args.ref_fa is not None:
   ref_fa=args.ref_fa
@@ -30,7 +34,7 @@ for line in open(cff_file, "r"):
     # ann_gene_order is an instance method of CffFusion class.  
     # Attempts to identify 5'->3' gene order
     # If gene name or gene loc doesnt exist in gene bed, gene order is more likely to be switched
-    fusion.ann_gene_order(gene_ann)
+    fusion.ann_gene_order(gene_ann,clinical_genes)
 
     #annotate fusion id and seq
     fusion.fusion_id = "F" + (str(n)).zfill(8)
