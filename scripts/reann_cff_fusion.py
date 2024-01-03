@@ -46,5 +46,5 @@ for line in open(cff_file, "r"):
     # Get fusion seq only if specified by user
     if args.ref_fa is not None: 
       pygeneann.get_fusion_seq(fusion, ref_fa, 100)
-    print fusion.tostring()
+    print(fusion.tostring())
     n += 1

@@ -9,13 +9,18 @@ import time
 import sequtils
 import copy
 import re
+from itertools import product
+
 #import pybedtools.bedtool
 
 
 # fusions are clusted by gene pairs
 # Category file format:
 #Gene_Cluster    HES1    IFNL1   43      41      Tumor   VALIDATION      integrate,defuse,ericscript     GeneFusion      True    True    True    True    -1      smc_rna_sim45   chr3    193854837       chr19   39787445
-
+def is_list_of_tuples(obj):
+    if isinstance(obj, list):
+        return all(isinstance(item, tuple) for item in obj)
+    return False
 class CategoryFusions():
     """
     Represents a line of the output file of the fusion pipeline. Each line of the file represents a possible fusion event.
@@ -886,42 +891,60 @@ class CffFusion():
         # If there is more than 1 transcript/gene/region with same score, will return the FIRST occurance of the score
         # This therefore can be somewhat random if there are a lot of transcripts/genes/regions with the same score
         ### If gene name is in clinical list, return all transcripts 
+        max_t1 = 0, "NA", "NA","NA","NA", GeneBed(""), "NA"
+        max_t2 = 0, "NA", "NA", "NA","NA", GeneBed(""), "NA"
         for gname1 in genes1:
+            ##
             if gname1 in clinical_genes:
-                print(gname1)
-            else:
+                list_of_max_t1 = []
+                for bpann1 in genes1[gname1]:
+                    score1, is_on_boundary1, close_to_boundary1 = self.__cal_score(bpann1, "head")  
+                    max_t1 = score1, is_on_boundary1, close_to_boundary1, bpann1.transcript_id,bpann1.type, bpann1, gname1
+                    list_of_max_t1.append(max_t1)
+                list_of_max_t1 = sorted(list_of_max_t1, key=lambda x: x[0],reverse = True)
 
-                max_t1 = 0, "NA", "NA", GeneBed("")
+                max_t1 = []
+                length_of_tuples = len(list_of_max_t1[0])
+                for i in range(length_of_tuples):
+                    max_t1.append(tuple(t[i] for t in list_of_max_t1))
+            else:
                 for bpann1 in genes1[gname1]:
                     score1, is_on_boundary1, close_to_boundary1 = self.__cal_score(bpann1, "head")  
                     if score1 == max_t1[0] and gname1==self.t_gene1:
-                        max_t1 = score1, is_on_boundary1, close_to_boundary1, bpann1
+                        max_t1 = score1, is_on_boundary1, close_to_boundary1, bpann1.transcript_id, bpann1.type, bpann1, gname1
                     if score1 > max_t1[0]:
-                        max_t1 = score1, is_on_boundary1, close_to_boundary1, bpann1
+                        max_t1 = score1, is_on_boundary1, close_to_boundary1, bpann1.transcript_id, bpann1.type, bpann1, gname1
         for gname2 in genes2:
             if gname2 in clinical_genes:
-                print(gname2)
+                list_of_max_t2 = []
+                for bpann2 in genes2[gname2]:
+                    score2, is_on_boundary2, close_to_boundary2 = self.__cal_score(bpann2, "head")  
+                    max_t2 = score2, is_on_boundary2, close_to_boundary2, bpann2.transcript_id,bpann2.type, bpann2, gname2
+                    list_of_max_t2.append(max_t2)
+                list_of_max_t2 = sorted(list_of_max_t2, key=lambda x: x[0], reverse = True)
+
+                max_t2 = []
+                length_of_tuples = len(list_of_max_t2[0])
+                for i in range(length_of_tuples):
+                    max_t2.append(tuple(t[i] for t in list_of_max_t2))
             else:
-                max_t2 = 0, "NA", "NA", GeneBed("")
                 for bpann2 in genes2[gname2]:
                     score2, is_on_boundary2, close_to_boundary2 = self.__cal_score(bpann2, "tail")  
                     #print(score2, is_on_boundary2, close_to_boundary2)
                     if score2 == max_t2[0] and gname2==self.t_gene2:
-                        max_t2 = score2, is_on_boundary2, close_to_boundary2, bpann2
+                        max_t2 = score2, is_on_boundary2, close_to_boundary2, bpann2.transcript_id, bpann2.type, bpann2, gname2
                     elif score2 > max_t2[0]:
-                        max_t2 = score2, is_on_boundary2, close_to_boundary2, bpann2
+                        max_t2 = score2, is_on_boundary2, close_to_boundary2, bpann2.transcript_id, bpann2.type, bpann2, gname2
 
         # If max_t1 + max_t2 is greater than previous score (should be zero on initialization, but if checking strand order a/b or d/c will have a previous score)
         # Assign max_t1 and max_t1 information to fusion
-        if gname2 not in clinical_genes and gname1 not in clinical_genes:
+        print(max_t1)
+        print(max_t2)
+        if not is_list_of_tuples(max_t1) and not is_list_of_tuples(max_t2):
             if max_t1[0] + max_t2[0] > self.score1 + self.score2:
-                self.score1, self.gene1_on_bndry, self.gene1_close_to_bndry, self.bpann1 = max_t1
-                self.score2, self.gene2_on_bndry, self.gene2_close_to_bndry, self.bpann2 = max_t2
+                self.score1, self.gene1_on_bndry, self.gene1_close_to_bndry, self.transcript1, self.reann_type1, self.bpann1, self.reann_gene1 = max_t1
+                self.score2, self.gene2_on_bndry, self.gene2_close_to_bndry, self.transcript2, self.reann_type2, self.bpann2, self.reann_gene2 = max_t2
                 self.score = self.score1 + self.score2
-                self.reann_gene1 = self.bpann1.gene_name
-                self.reann_gene2 = self.bpann2.gene_name
-                self.reann_type1 = self.bpann1.type
-                self.reann_type2 = self.bpann2.type
                 ## Checking if both genes are coding genes
                 if id1 and id2:
                     if len(set(id1)) != 1 or len(set(id2))!= 1:
@@ -936,8 +959,8 @@ class CffFusion():
                     idx1 = int(id1[0].split("_")[0])
                     idx2 = int(id2[0].split("_")[0])
                     self.coding_id_distance = abs(idx1 - idx2)
-                gene_interval1 = gene_ann.get_gene_interval(self.bpann1.gene_name)
-                gene_interval2 = gene_ann.get_gene_interval(self.bpann2.gene_name)
+                gene_interval1 = gene_ann.get_gene_interval(self.reann_gene1)
+                gene_interval2 = gene_ann.get_gene_interval(self.reann_gene2)
 
                 # If genes are on same chromosome, how far apart are they
                 if gene_interval1 and gene_interval2:
@@ -988,11 +1011,278 @@ class CffFusion():
                         print >> sys.stderr, "Warning: Unknown category."
                         print >> sys.stderr, type1, type2
                 self.category = category
-                # Return transcript assigned
-                self.transcript1 = self.bpann1.transcript_id
-                self.transcript2 = self.bpann2.transcript_id
+        elif is_list_of_tuples(max_t1) and is_list_of_tuples(max_t2) :
+            sys.stderr.write("Need to handle tuples...")
+            self.score1, self.gene1_on_bndry, self.gene1_close_to_bndry, self.transcript1, self.reann_type1, self.bpann1, self.reann_gene1 = max_t1
+            self.score2, self.gene2_on_bndry, self.gene2_close_to_bndry, self.transcript2,self.reann_type2, self.bpann2, self.reann_gene2 = max_t2
+            self.reann_type2 = ','.join(str(item) for item in self.reann_type2)
+            self.transcript2 = ','.join(str(item) for item in self.transcript2)
+            self.gene2_close_to_bndry = ','.join(map(str,self.gene2_close_to_bndry))
+            self.gene2_on_bndry = ','.join(map(str,self.gene2_on_bndry))
+            self.reann_type1 = ','.join(str(item) for item in self.reann_type1)
+            self.transcript1 = ','.join(str(item) for item in self.transcript1)
+            self.gene1_close_to_bndry = ','.join(map(str,self.gene1_close_to_bndry))
+            self.gene1_on_bndry = ','.join(map(str,self.gene1_on_bndry))
+
+            self.score = [sum(pair) for pair in product(self.score1, self.score2)]
+            self.score = ','.join(str(item) for item in self.score)
+            ## Checking if both genes are coding genes
+            if id1 and id2:
+                if len(set(id1)) != 1 or len(set(id2))!= 1:
+                    print >> sys.stderr, "coding id err."
+                    print >> sys.stderr, id1, id2
+                    sys.exit(1)
+                # How many coding genes are "between" gene1 and gene2
+                # IDX based on the order of the gene_bed you put in. 
+                # First coding gene in gene_bed == idx_1
+                # Second coding gene in gene_bed == idx_2
+                # I believe v75_gene.bed is chr1->chr21->chrX->chrY
+                idx1 = int(id1[0].split("_")[0])
+                idx2 = int(id2[0].split("_")[0])
+                self.coding_id_distance = abs(idx1 - idx2)
+            are_all_same1 = all(element == self.reann_gene1[0] for element in self.reann_gene1)
+            are_all_same2 = all(element == self.reann_gene2[0] for element in self.reann_gene2)
+
+            if are_all_same1:
+                self.reann_gene1 = self.reann_gene1[0]
+                gene_interval1 = gene_ann.get_gene_interval(self.reann_gene1)
+            else:
+                sys.stderr.write(self.reann_gene1)
+                sys.stderr.write("GENE1NAMES ARE DIFFERENT")
+            if are_all_same2:
+                self.reann_gene2 = self.reann_gene2[0]
+                gene_interval2 = gene_ann.get_gene_interval(self.reann_gene2)
+            else:
+                sys.stderr.write(self.reann_gene2)
+                sys.stderr.write("GENE2 NAMES ARE DIFFERENT")
+
+            # If genes are on same chromosome, how far apart are they
+            if gene_interval1 and gene_interval2:
+                if gene_interval1.chr == gene_interval2.chr:
+                    self.gene_interval_distance = max(gene_interval1.start, gene_interval2.start) - min(gene_interval1.end, gene_interval2.end)
+
+            ## assign fusion to a category according to best score gene pair
+            # No driver gene
+            # If a gene/loc not in gene bed will occur ,as well as for biological reason 
+            if not genes1:
+                category = "NoDriverGene"
+            # map to same gene
+            elif self.reann_gene1 == self.reann_gene2:
+                category = "SameGene"
+            else:
+                # category fusions into: read through, gene fusion, truncated coding, truncated noncoding, nonsense
+                # If a gene/loc not in gene bed can also get truncated coding/truncated noncoding
+                if are_all_same1:
+                    gene1_is_coding = gene_ann.is_coding(self.reann_gene1)
+                else:
+                    sys.stderr.write("GENE 1NAMES ARE DIFFERENT CHECK THIS OUT")
+                if genes2:
+                    if are_all_same2:
+                        gene2_is_coding = gene_ann.is_coding(self.reann_gene2)
+                    else:
+                        sys.stderr.write("GENE 2NAMES ARE DIFFERENT CHECK THIS OUT")
+                else:
+                    gene2_is_coding = False
+                if debug: 
+                    print("gene1_is_coding:", gene1_is_coding, "gene2_is_coding", gene2_is_coding)
+                    #print("gene1_is_coding:", gene1_is_coding, "gene2_is_coding", gene2_is_coding)
+                    #print("self.reann_gene1", self.reann_gene1, "self.reann_gene2", self.reann_gene2)
+                    #print("GeneAnnotation coding gene list", gene_ann._GeneAnnotation__coding_gene_list)#[reann_gene1])
+                    #print("gene_ann", gene_ann._GeneAnnotation__gene_intervals)#[reann_gene1])
+                    #print("gene 1 is coding", gene_ann._GeneAnnotation__gene_intervals[self.reann_gene1].is_coding)#[reann_gene1])
+                    #print("gene 1 is coding", gene_ann._GeneAnnotation__gene_intervals[self.reann_gene1].tostring())#[reann_gene1])
+                    #print("gene_ann", dir(gene_ann))#[reann_gene1])
+                if gene1_is_coding and gene2_is_coding:
+                    for id in id1:
+                        tmp = id.split("_")
+                        idx = int(tmp[0])
+                        strand = tmp[1]
+                        #ReadThrough: gene1 and gene2 are adjacent genes (id1 - id2 = 1) or overlapping genes (id1 = id2) but breakpoints cannot map to same gene
+                        if (strand == "f" and  str(idx+1) + "_f" in id2 ) or (strand == "r" and  str(idx-1) + "_r" in id2) or (id in id2):
+                            category = "ReadThrough"
+                        else:
+                            category = "GeneFusion"
+                elif gene1_is_coding:
+                    category = "TruncatedCoding"
+                elif not gene1_is_coding:
+                    category = "TruncatedNoncoding"
+                else:
+                    print >> sys.stderr, "Warning: Unknown category."
+                    print >> sys.stderr, type1, type2
+            self.category = category
+        elif is_list_of_tuples(max_t1) and not is_list_of_tuples(max_t2):
+            sys.stderr.write("listOfTuple1,tuple2")
+            self.score1, self.gene1_on_bndry, self.gene1_close_to_bndry, self.transcript1, self.reann_type1, self.bpann1, self.reann_gene1 = max_t1
+            self.score2, self.gene2_on_bndry, self.gene2_close_to_bndry, self.transcript2,self.reann_type2, self.bpann2, self.reann_gene2 = max_t2
+            self.reann_type1 = ','.join(str(item) for item in self.reann_type1)
+            self.transcript1 = ','.join(str(item) for item in self.transcript1)
+            self.gene1_close_to_bndry = ','.join(map(str,self.gene1_close_to_bndry))
+            self.gene1_on_bndry = ','.join(map(str,self.gene1_on_bndry))
+            
+            self.score = tuple(element + self.score2 for element in self.score1)
+            self.score = ','.join(str(item) for item in self.score)
+            ## Checking if both genes are coding genes
+            if id1 and id2:
+                if len(set(id1)) != 1 or len(set(id2))!= 1:
+                    print >> sys.stderr, "coding id err."
+                    print >> sys.stderr, id1, id2
+                    sys.exit(1)
+                # How many coding genes are "between" gene1 and gene2
+                # IDX based on the order of the gene_bed you put in. 
+                # First coding gene in gene_bed == idx_1
+                # Second coding gene in gene_bed == idx_2
+                # I believe v75_gene.bed is chr1->chr21->chrX->chrY
+                idx1 = int(id1[0].split("_")[0])
+                idx2 = int(id2[0].split("_")[0])
+                self.coding_id_distance = abs(idx1 - idx2)
+            are_all_same = all(element == self.reann_gene1[0] for element in self.reann_gene1)
+            if are_all_same:
+                self.reann_gene1 = self.reann_gene1[0]
+                gene_interval1 = gene_ann.get_gene_interval(self.reann_gene1)
+            else:
+                sys.stderr.write(self.reann_gene1)
+                sys.stderr.write("GENE NAMES ARE DIFFERENT")
+
+            gene_interval2 = gene_ann.get_gene_interval(self.reann_gene2)
+
+            # If genes are on same chromosome, how far apart are they
+            if gene_interval1 and gene_interval2:
+                if gene_interval1.chr == gene_interval2.chr:
+                    self.gene_interval_distance = max(gene_interval1.start, gene_interval2.start) - min(gene_interval1.end, gene_interval2.end)
+
+            ## assign fusion to a category according to best score gene pair
+            # No driver gene
+            # If a gene/loc not in gene bed will occur ,as well as for biological reason 
+            if not genes1:
+                category = "NoDriverGene"
+            # map to same gene
+            elif self.reann_gene1 == self.reann_gene2:
+                category = "SameGene"
+            else:
+                # category fusions into: read through, gene fusion, truncated coding, truncated noncoding, nonsense
+                # If a gene/loc not in gene bed can also get truncated coding/truncated noncoding
+                if are_all_same:
+                    gene1_is_coding = gene_ann.is_coding(self.reann_gene1)
+                else:
+                    sys.stderr.write("GENE NAMES ARE DIFFERENT CHECK THIS OUT")
+                if genes2:
+                    gene2_is_coding = gene_ann.is_coding(self.reann_gene2)
+                else:
+                    gene2_is_coding = False
+                if debug: 
+                    print("gene1_is_coding:", gene1_is_coding, "gene2_is_coding", gene2_is_coding)
+                    #print("gene1_is_coding:", gene1_is_coding, "gene2_is_coding", gene2_is_coding)
+                    #print("self.reann_gene1", self.reann_gene1, "self.reann_gene2", self.reann_gene2)
+                    #print("GeneAnnotation coding gene list", gene_ann._GeneAnnotation__coding_gene_list)#[reann_gene1])
+                    #print("gene_ann", gene_ann._GeneAnnotation__gene_intervals)#[reann_gene1])
+                    #print("gene 1 is coding", gene_ann._GeneAnnotation__gene_intervals[self.reann_gene1].is_coding)#[reann_gene1])
+                    #print("gene 1 is coding", gene_ann._GeneAnnotation__gene_intervals[self.reann_gene1].tostring())#[reann_gene1])
+                    #print("gene_ann", dir(gene_ann))#[reann_gene1])
+                if gene1_is_coding and gene2_is_coding:
+                    for id in id1:
+                        tmp = id.split("_")
+                        idx = int(tmp[0])
+                        strand = tmp[1]
+                        #ReadThrough: gene1 and gene2 are adjacent genes (id1 - id2 = 1) or overlapping genes (id1 = id2) but breakpoints cannot map to same gene
+                        if (strand == "f" and  str(idx+1) + "_f" in id2 ) or (strand == "r" and  str(idx-1) + "_r" in id2) or (id in id2):
+                            category = "ReadThrough"
+                        else:
+                            category = "GeneFusion"
+                elif gene1_is_coding:
+                    category = "TruncatedCoding"
+                elif not gene1_is_coding:
+                    category = "TruncatedNoncoding"
+                else:
+                    print >> sys.stderr, "Warning: Unknown category."
+                    print >> sys.stderr, type1, type2
+            self.category = category
         else:
-            print("A gene is from clinicl")
+            self.score1, self.gene1_on_bndry, self.gene1_close_to_bndry, self.transcript1, self.reann_type1, self.bpann1, self.reann_gene1 = max_t1
+            self.score2, self.gene2_on_bndry, self.gene2_close_to_bndry, self.transcript2,self.reann_type2, self.bpann2, self.reann_gene2 = max_t2
+            self.reann_type2 = ','.join(str(item) for item in self.reann_type2)
+            self.transcript2 = ','.join(str(item) for item in self.transcript2)
+            self.gene2_close_to_bndry = ','.join(map(str,self.gene2_close_to_bndry))
+            self.gene2_on_bndry = ','.join(map(str,self.gene2_on_bndry))
+
+            self.score = tuple(element + self.score1 for element in self.score2)
+            self.score = ','.join(str(item) for item in self.score)
+            ## Checking if both genes are coding genes
+            if id1 and id2:
+                if len(set(id1)) != 1 or len(set(id2))!= 1:
+                    print >> sys.stderr, "coding id err."
+                    print >> sys.stderr, id1, id2
+                    sys.exit(1)
+                # How many coding genes are "between" gene1 and gene2
+                # IDX based on the order of the gene_bed you put in. 
+                # First coding gene in gene_bed == idx_1
+                # Second coding gene in gene_bed == idx_2
+                # I believe v75_gene.bed is chr1->chr21->chrX->chrY
+                idx1 = int(id1[0].split("_")[0])
+                idx2 = int(id2[0].split("_")[0])
+                self.coding_id_distance = abs(idx1 - idx2)
+            are_all_same = all(element == self.reann_gene2[0] for element in self.reann_gene2)
+            if are_all_same:
+                self.reann_gene2 = self.reann_gene2[0]
+                gene_interval2 = gene_ann.get_gene_interval(self.reann_gene2)
+            else:
+                sys.stderr.write(self.reann_gene2)
+                sys.stderr.write("GENE NAMES ARE DIFFERENT")
+
+            gene_interval1 = gene_ann.get_gene_interval(self.reann_gene1)
+
+            # If genes are on same chromosome, how far apart are they
+            if gene_interval1 and gene_interval2:
+                if gene_interval1.chr == gene_interval2.chr:
+                    self.gene_interval_distance = max(gene_interval1.start, gene_interval2.start) - min(gene_interval1.end, gene_interval2.end)
+
+            ## assign fusion to a category according to best score gene pair
+            # No driver gene
+            # If a gene/loc not in gene bed will occur ,as well as for biological reason 
+            if not genes1:
+                category = "NoDriverGene"
+            # map to same gene
+            elif self.reann_gene1 == self.reann_gene2:
+                category = "SameGene"
+            else:
+                # category fusions into: read through, gene fusion, truncated coding, truncated noncoding, nonsense
+                # If a gene/loc not in gene bed can also get truncated coding/truncated noncoding
+  
+                gene1_is_coding = gene_ann.is_coding(self.reann_gene1)
+                if genes2:
+                    if are_all_same:
+                        gene2_is_coding = gene_ann.is_coding(self.reann_gene2)
+                    else:
+                        sys.stderr.write(self.reann_gene2)
+                        sys.stderr.write("GENE NAMES ARE DIFFERENT")
+                else:
+                    gene2_is_coding = False
+                if debug: 
+                    print("gene1_is_coding:", gene1_is_coding, "gene2_is_coding", gene2_is_coding)
+                    #print("gene1_is_coding:", gene1_is_coding, "gene2_is_coding", gene2_is_coding)
+                    #print("self.reann_gene1", self.reann_gene1, "self.reann_gene2", self.reann_gene2)
+                    #print("GeneAnnotation coding gene list", gene_ann._GeneAnnotation__coding_gene_list)#[reann_gene1])
+                    #print("gene_ann", gene_ann._GeneAnnotation__gene_intervals)#[reann_gene1])
+                    #print("gene 1 is coding", gene_ann._GeneAnnotation__gene_intervals[self.reann_gene1].is_coding)#[reann_gene1])
+                    #print("gene 1 is coding", gene_ann._GeneAnnotation__gene_intervals[self.reann_gene1].tostring())#[reann_gene1])
+                    #print("gene_ann", dir(gene_ann))#[reann_gene1])
+                if gene1_is_coding and gene2_is_coding:
+                    for id in id1:
+                        tmp = id.split("_")
+                        idx = int(tmp[0])
+                        strand = tmp[1]
+                        #ReadThrough: gene1 and gene2 are adjacent genes (id1 - id2 = 1) or overlapping genes (id1 = id2) but breakpoints cannot map to same gene
+                        if (strand == "f" and  str(idx+1) + "_f" in id2 ) or (strand == "r" and  str(idx-1) + "_r" in id2) or (id in id2):
+                            category = "ReadThrough"
+                        else:
+                            category = "GeneFusion"
+                elif gene1_is_coding:
+                    category = "TruncatedCoding"
+                elif not gene1_is_coding:
+                    category = "TruncatedNoncoding"
+                else:
+                    print >> sys.stderr, "Warning: Unknown category."
+                    print >> sys.stderr, type1, type2
+            self.category = category
         return ""
 
     # based on given gene annotations re-annotate cff fusions, infer possible up/downstream genes, try to fill in strand if info missing
@@ -1084,16 +1374,17 @@ class CffFusion():
         # Coding genes are more likely to be seleceted with higher scores
         if self.strand1 == "+" and self.strand2 == "-":
             gene_order = self.__check_gene_pairs(a, d, gene_ann, False,clinical_genes)
-            gene_order += self.__check_gene_pairs(b, c, gene_ann, True,clinical_genes)
+            #commenting out changning gene order beause we are assuming our forte callers are in the right order
+            #gene_order += self.__check_gene_pairs(b, c, gene_ann, True,clinical_genes)
         elif self.strand1 == "+" and self.strand2 == "+":
             gene_order = self.__check_gene_pairs(a, b, gene_ann, False,clinical_genes)
-            gene_order += self.__check_gene_pairs(d, c, gene_ann, True,clinical_genes)
+            #gene_order += self.__check_gene_pairs(d, c, gene_ann, True,clinical_genes)
         elif self.strand1 == "-" and self.strand2 == "-":
             gene_order = self.__check_gene_pairs(c, d, gene_ann, False,clinical_genes)
-            gene_order += self.__check_gene_pairs(b, a, gene_ann, True,clinical_genes)
+            #gene_order += self.__check_gene_pairs(b, a, gene_ann, True,clinical_genes)
         elif self.strand1 == "-" and self.strand2 == "+":
             gene_order = self.__check_gene_pairs(c, b, gene_ann, False,clinical_genes)
-            gene_order += self.__check_gene_pairs(d, a, gene_ann, True,clinical_genes)
+            #gene_order += self.__check_gene_pairs(d, a, gene_ann, True,clinical_genes)
   
 
     # realign breakpoints of this fusion to the left most, not finished, how to define "left" when genes are on different chrs 
