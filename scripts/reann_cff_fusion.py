@@ -4,13 +4,13 @@ import  pygeneann_MetaFusion as pygeneann
 import sequtils
 import pysam
 import argparse
-
+import pandas as pd
 
 
 parser = argparse.ArgumentParser()
 
 parser.add_argument('--cff', action='store', help='CFF file, can be .cff or cff.reann')
-parser.add_argument('--gene_bed', action='store', help='Ensemble gene file')
+parser.add_argument('--gene_bed', action='store', help='Ensembl gene file')
 parser.add_argument('--ref_fa', required=False, action='store', help='Reference genome file')
 parser.add_argument('--clinical_genes', required = True,action='store', help='Clinical Gene Names, genes in this file will return all possible transcript IDs' )
 
@@ -18,8 +18,7 @@ args = parser.parse_args()
 cff_file = args.cff
 ensbed = args.gene_bed
 clinical_file_path = args.clinical_genes
-with open(clinical_file_path,'r') as file:
-   clinical_genes = file.read().splitlines()
+clinical_genes = pd.read_csv(clinical_file_path, delimiter='\t')
 # Assign reference fasta if provided by user
 if args.ref_fa is not None:
   ref_fa=args.ref_fa
