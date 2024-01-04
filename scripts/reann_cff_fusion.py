@@ -12,7 +12,7 @@ parser = argparse.ArgumentParser()
 parser.add_argument('--cff', action='store', help='CFF file, can be .cff or cff.reann')
 parser.add_argument('--gene_bed', action='store', help='Ensembl gene file')
 parser.add_argument('--ref_fa', required=False, action='store', help='Reference genome file')
-parser.add_argument('--clinical_genes', required = True,action='store', help='Clinical Gene Names, genes in this file will return all possible transcript IDs' )
+parser.add_argument('--clinical_genes', required = True,action='store', help='Clinical genes with ensembl and refseq transcripts' )
 
 args = parser.parse_args()
 cff_file = args.cff
