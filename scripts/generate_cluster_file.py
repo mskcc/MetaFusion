@@ -17,7 +17,7 @@ cff=args.cff
 FIDs=args.FIDs
 
 def output_clustered_fusions(fusion_list, cluster_type):
-        use_reference_fusion=1
+        use_reference_fusion=0
         #use first fusion in fusion as reference fusion to account for flipped fusions for BP_Cluster
         if use_reference_fusion:
             try:

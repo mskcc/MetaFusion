@@ -9,13 +9,15 @@ import time
 import sequtils
 import copy
 import re
+import pandas as pd
+from itertools import product
+
 #import pybedtools.bedtool
 
 
 # fusions are clusted by gene pairs
 # Category file format:
 #Gene_Cluster    HES1    IFNL1   43      41      Tumor   VALIDATION      integrate,defuse,ericscript     GeneFusion      True    True    True    True    -1      smc_rna_sim45   chr3    193854837       chr19   39787445
-
 class CategoryFusions():
     """
     Represents a line of the output file of the fusion pipeline. Each line of the file represents a possible fusion event.
@@ -566,6 +568,8 @@ class CffFusion():
             self.captured_reads = int(tmp[36]) 
             self.transcript1 = tmp[37]
             self.transcript2 = tmp[38]
+            self.is_clinical1 = tmp[39]
+            self.is_clinical2 = tmp[40]
         else:
             self.category = "NA"    # category
             self.reann_gene1 = "NA"
@@ -589,6 +593,8 @@ class CffFusion():
             self.closest_exon2 = "NA"
             self.transcript1 = "NA"
             self.transcript2 = "NA"
+            self.is_clinical1 = "NA"
+            self.is_clinical2 = "NA"
             self.captured_reads = -1
             if len(tmp) == 30:
                 self.dnasupp = tmp[29]
@@ -605,7 +611,7 @@ class CffFusion():
         self.zone2_attrs = ["library", "sample_name", "sample_type", "disease"]
         self.zone3_attrs = ["tool", "split_cnt", "span_cnt", "t_gene1", "t_area1", "t_gene2", "t_area2"]
         #self.zone4_attrs = ["category", "reann_gene1", "reann_type1", "reann_gene2", "reann_type2", "gene1_on_bdry", "gene1_close_to_bndry", "gene2_on_bdry", "gene2_close_to_bndry", "score", "coding_id_distance", "gene_interval_distance", "dna_support", "fusion_id", "seq1", "seq2", "is_inframe", "splice_site1", "splice_site2", "captured_reads"]  
-        self.zone4_attrs = ["category", "reann_gene1", "reann_type1", "reann_gene2", "reann_type2", "gene1_on_bdry", "gene1_close_to_bndry", "gene2_on_bdry", "gene2_close_to_bndry", "score", "coding_id_distance", "gene_interval_distance", "dna_support", "fusion_id", "seq1", "seq2", "is_inframe", "closest_exon1", "closest_exon2", "captured_reads","transcript1","transcript2"]
+        self.zone4_attrs = ["category", "reann_gene1", "reann_type1", "reann_gene2", "reann_type2", "gene1_on_bdry", "gene1_close_to_bndry", "gene2_on_bdry", "gene2_close_to_bndry", "score", "coding_id_distance", "gene_interval_distance", "dna_support", "fusion_id", "seq1", "seq2", "is_inframe", "closest_exon1", "closest_exon2", "captured_reads","transcript1","transcript2","is_clinical1","is_clinical2"]
         #self.zone4_attrs = ["reann_gene_order1", "reann_gene_type1", "reann_gene_index1", "reann_category1", "reann_gene_order2", "reann_gene_type2", "reann_gene_index2", "reann_category2"]
         # format chr
         if not self.chr1.startswith("chr"):
@@ -752,7 +758,7 @@ class CffFusion():
                 value.append(self.__dict__[attr])
         self.boundary_info = "\t".join(map(str, [self.gene1_on_bndry, self.gene1_close_to_bndry, self.gene2_on_bndry, self.gene2_close_to_bndry]))
         if self.fusion_id != "NA":
-            return "\t".join(map(lambda x:str(x), value)) + "\t" + self.category + "\t" + self.reann_gene1 + "\t" + self.reann_type1 + "\t" + self.reann_gene2 + "\t" + self.reann_type2 + "\t" + self.boundary_info + "\t" + str(self.score) + "\t" + str(self.coding_id_distance) + "\t" + str(self.gene_interval_distance) + "\t" + str(self.dnasupp) + "\t" + self.fusion_id + "\t" + self.seq1 + "\t" + self.seq2 + "\t" + str(self.is_inframe) + "\t" + self.closest_exon1 + "\t" + self.closest_exon2 + "\t" + str(self.captured_reads) + "\t" + str(self.transcript1) + "\t"  + str(self.transcript2)
+            return "\t".join(map(lambda x:str(x), value)) + "\t" + self.category + "\t" + self.reann_gene1 + "\t" + self.reann_type1 + "\t" + self.reann_gene2 + "\t" + self.reann_type2 + "\t" + self.boundary_info + "\t" + str(self.score) + "\t" + str(self.coding_id_distance) + "\t" + str(self.gene_interval_distance) + "\t" + str(self.dnasupp) + "\t" + self.fusion_id + "\t" + self.seq1 + "\t" + self.seq2 + "\t" + str(self.is_inframe) + "\t" + self.closest_exon1 + "\t" + self.closest_exon2 + "\t" + str(self.captured_reads) + "\t" + str(self.transcript1) + "\t"  + str(self.transcript2) + "\t" + str(self.is_clinical1) + "\t"  + str(self.is_clinical2)
         else:
             return "\t".join(map(lambda x:str(x), value)) 
     
@@ -806,7 +812,7 @@ class CffFusion():
         return is_on_boundary, close_to_boundary
 
     # assign a score for every potential fusion gene pair;order is head/tail gene       
-    def __cal_score(self, bpann, order):
+    def __cal_score(self, bpann,clinical_genes, order):
         # Scores to choose best annotation
         score_exon_bnd = 3
         score_exon_bnd_close = 2.9
@@ -825,6 +831,10 @@ class CffFusion():
         # Exon > UTR > intron
         # On_boundary > close_to_boundary > inside_region
         is_on_boundary, close_to_boundary = self.__check_boundary(bpann, order)
+        if  bpann.transcript_id in clinical_genes["ensembl_transcript"].values:
+            is_clinical =  clinical_genes.loc[clinical_genes['ensembl_transcript'] == bpann.transcript_id, 'refseq_transcript'].values.item()
+        else: 
+            is_clinical = "NA"
         score = 0
         if bpann.type == "cds":
             if is_on_boundary:
@@ -845,14 +855,14 @@ class CffFusion():
         else:
             print >> sys.stderr, "Unknown type:", bpann.type
             sys.exit(1)
-        return score, is_on_boundary, close_to_boundary 
+        return score, is_on_boundary, close_to_boundary, is_clinical
                         
     # according to fusion strand (defuse style, strands are supporting pairs') return all possible gene fusions;
     # depending on gene1 and gene2 (a,b,c,d), may have to switch pos order
     # Switching should theoretically ONLY occur when a gene isnt in the gene bed file
     # Metafusion wont know how to annotate the gene if the loc or name is not in the gene_bed file
     # Arriba, starfusion and Fusioncatcher all output the genes in the correct order
-    def __check_gene_pairs(self, genes1, genes2, gene_ann, switch_pos):
+    def __check_gene_pairs(self, genes1, genes2, gene_ann, switch_pos,clinical_genes):
         # check to make sure both genes1 and genes2 have items in them
         gene_order = []
         type1 = []
@@ -875,10 +885,8 @@ class CffFusion():
             else:
                 type2.append("NoncodingGene")
         # Calculate score for every gene pair, choose the best
-        
         # get best score for current gene combination   
-        max_t1 = 0, "NA", "NA", GeneBed("")
-        max_t2 = 0, "NA", "NA", GeneBed("")
+
         # This step will pick which gene name to assign to reann_gene
         # All Metafusion annotations are based on reann_gene
         # For each gene in the fusion, identify the highest scoring transcript/gene/region 
@@ -887,32 +895,32 @@ class CffFusion():
         # Identify region/transcript with highest score  
         # If there is more than 1 transcript/gene/region with same score, will return the FIRST occurance of the score
         # This therefore can be somewhat random if there are a lot of transcripts/genes/regions with the same score
+        ### If gene name is in clinical list, attempt to return transcript of interest if higest scoring
+        max_t1 = 0, "NA", "NA","NA","NA", GeneBed(""), "NA", "NA"
+        max_t2 = 0, "NA", "NA", "NA","NA", GeneBed(""), "NA", "NA"
+
         for gname1 in genes1:
             for bpann1 in genes1[gname1]:
-                score1, is_on_boundary1, close_to_boundary1 = self.__cal_score(bpann1, "head")  
-                if score1 == max_t1[0] and gname1==self.t_gene1:
-                    max_t1 = score1, is_on_boundary1, close_to_boundary1, bpann1
+                score1, is_on_boundary1, close_to_boundary1,is_clinical1 = self.__cal_score(bpann1,clinical_genes, "head")
+                if (score1 == max_t1[0] and gname1==self.t_gene1) or (score1 == max_t1[0] and is_clinical1 != "NA"): 
+                    max_t1 = score1, is_on_boundary1, close_to_boundary1, bpann1.transcript_id, bpann1.type, bpann1, gname1, is_clinical1
                 if score1 > max_t1[0]:
-                    max_t1 = score1, is_on_boundary1, close_to_boundary1, bpann1
+                    max_t1 = score1, is_on_boundary1, close_to_boundary1, bpann1.transcript_id, bpann1.type, bpann1, gname1, is_clinical1
         for gname2 in genes2:
             for bpann2 in genes2[gname2]:
-                score2, is_on_boundary2, close_to_boundary2 = self.__cal_score(bpann2, "tail")  
+                score2, is_on_boundary2, close_to_boundary2, is_clinical2 = self.__cal_score(bpann2,clinical_genes, "tail")  
                 #print(score2, is_on_boundary2, close_to_boundary2)
-                if score2 == max_t2[0] and gname2==self.t_gene2:
-                    max_t2 = score2, is_on_boundary2, close_to_boundary2, bpann2
-                elif score2 > max_t2[0]:
-                    max_t2 = score2, is_on_boundary2, close_to_boundary2, bpann2
+                if (score2 == max_t2[0] and gname2==self.t_gene2) or (score2 == max_t2[0] and is_clinical2 != "NA") :
+                    max_t2 = score2, is_on_boundary2, close_to_boundary2, bpann2.transcript_id, bpann2.type, bpann2, gname2, is_clinical2
+                if score2 > max_t2[0]:
+                    max_t2 = score2, is_on_boundary2, close_to_boundary2, bpann2.transcript_id, bpann2.type, bpann2, gname2, is_clinical2
 
         # If max_t1 + max_t2 is greater than previous score (should be zero on initialization, but if checking strand order a/b or d/c will have a previous score)
         # Assign max_t1 and max_t1 information to fusion
         if max_t1[0] + max_t2[0] > self.score1 + self.score2:
-            self.score1, self.gene1_on_bndry, self.gene1_close_to_bndry, self.bpann1 = max_t1
-            self.score2, self.gene2_on_bndry, self.gene2_close_to_bndry, self.bpann2 = max_t2
+            self.score1, self.gene1_on_bndry, self.gene1_close_to_bndry, self.transcript1, self.reann_type1, self.bpann1, self.reann_gene1,self.is_clinical1 = max_t1
+            self.score2, self.gene2_on_bndry, self.gene2_close_to_bndry, self.transcript2, self.reann_type2, self.bpann2, self.reann_gene2,self.is_clinical2 = max_t2
             self.score = self.score1 + self.score2
-            self.reann_gene1 = self.bpann1.gene_name
-            self.reann_gene2 = self.bpann2.gene_name
-            self.reann_type1 = self.bpann1.type
-            self.reann_type2 = self.bpann2.type
             ## Checking if both genes are coding genes
             if id1 and id2:
                 if len(set(id1)) != 1 or len(set(id2))!= 1:
@@ -927,8 +935,8 @@ class CffFusion():
                 idx1 = int(id1[0].split("_")[0])
                 idx2 = int(id2[0].split("_")[0])
                 self.coding_id_distance = abs(idx1 - idx2)
-            gene_interval1 = gene_ann.get_gene_interval(self.bpann1.gene_name)
-            gene_interval2 = gene_ann.get_gene_interval(self.bpann2.gene_name)
+            gene_interval1 = gene_ann.get_gene_interval(self.reann_gene1)
+            gene_interval2 = gene_ann.get_gene_interval(self.reann_gene2)
 
             # If genes are on same chromosome, how far apart are they
             if gene_interval1 and gene_interval2:
@@ -979,13 +987,10 @@ class CffFusion():
                     print >> sys.stderr, "Warning: Unknown category."
                     print >> sys.stderr, type1, type2
             self.category = category
-            # Return transcript assigned
-            self.transcript1 = self.bpann1.transcript_id
-            self.transcript2 = self.bpann2.transcript_id
         return ""
 
     # based on given gene annotations re-annotate cff fusions, infer possible up/downstream genes, try to fill in strand if info missing
-    def ann_gene_order(self, gene_ann):
+    def ann_gene_order(self, gene_ann,clinical_genes):
         gene_order = []
         
         # get genes which correspond to 5' and 3' breakpoints (i.e. pos1 and pos2, respectively)
@@ -1072,17 +1077,17 @@ class CffFusion():
         # Attempts to ASSIGN SCORE, TRANSCRIPT, FUSION TYPE, and REANN GENE according to gene order 
         # Coding genes are more likely to be seleceted with higher scores
         if self.strand1 == "+" and self.strand2 == "-":
-            gene_order = self.__check_gene_pairs(a, d, gene_ann, False)
-            gene_order += self.__check_gene_pairs(b, c, gene_ann, True)
+            gene_order = self.__check_gene_pairs(a, d, gene_ann, False,clinical_genes)
+            gene_order += self.__check_gene_pairs(b, c, gene_ann, True,clinical_genes)
         elif self.strand1 == "+" and self.strand2 == "+":
-            gene_order = self.__check_gene_pairs(a, b, gene_ann, False)
-            gene_order += self.__check_gene_pairs(d, c, gene_ann, True)
+            gene_order = self.__check_gene_pairs(a, b, gene_ann, False,clinical_genes)
+            gene_order += self.__check_gene_pairs(d, c, gene_ann, True,clinical_genes)
         elif self.strand1 == "-" and self.strand2 == "-":
-            gene_order = self.__check_gene_pairs(c, d, gene_ann, False)
-            gene_order += self.__check_gene_pairs(b, a, gene_ann, True)
+            gene_order = self.__check_gene_pairs(c, d, gene_ann, False,clinical_genes)
+            gene_order += self.__check_gene_pairs(b, a, gene_ann, True,clinical_genes)
         elif self.strand1 == "-" and self.strand2 == "+":
-            gene_order = self.__check_gene_pairs(c, b, gene_ann, False)
-            gene_order += self.__check_gene_pairs(d, a, gene_ann, True)
+            gene_order = self.__check_gene_pairs(c, b, gene_ann, False,clinical_genes)
+            gene_order += self.__check_gene_pairs(d, a, gene_ann, True,clinical_genes)
   
 
     # realign breakpoints of this fusion to the left most, not finished, how to define "left" when genes are on different chrs 
