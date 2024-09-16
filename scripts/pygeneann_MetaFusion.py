@@ -902,7 +902,7 @@ class CffFusion():
         for gname1 in genes1:
             for bpann1 in genes1[gname1]:
                 score1, is_on_boundary1, close_to_boundary1,is_clinical1 = self.__cal_score(bpann1,clinical_genes, "head")
-                if (score1 == max_t1[0] and gname1==self.t_gene1) or (score1 == max_t1[0] and is_clinical1 != "NA"): 
+                if (score1 == max_t1[0] and is_clinical1 != "NA"): 
                     max_t1 = score1, is_on_boundary1, close_to_boundary1, bpann1.transcript_id, bpann1.type, bpann1, gname1, is_clinical1
                 if score1 > max_t1[0]:
                     max_t1 = score1, is_on_boundary1, close_to_boundary1, bpann1.transcript_id, bpann1.type, bpann1, gname1, is_clinical1
@@ -910,7 +910,7 @@ class CffFusion():
             for bpann2 in genes2[gname2]:
                 score2, is_on_boundary2, close_to_boundary2, is_clinical2 = self.__cal_score(bpann2,clinical_genes, "tail")  
                 #print(score2, is_on_boundary2, close_to_boundary2)
-                if (score2 == max_t2[0] and gname2==self.t_gene2) or (score2 == max_t2[0] and is_clinical2 != "NA") :
+                if (score2 == max_t2[0] and is_clinical2 != "NA") :
                     max_t2 = score2, is_on_boundary2, close_to_boundary2, bpann2.transcript_id, bpann2.type, bpann2, gname2, is_clinical2
                 if score2 > max_t2[0]:
                     max_t2 = score2, is_on_boundary2, close_to_boundary2, bpann2.transcript_id, bpann2.type, bpann2, gname2, is_clinical2
@@ -996,18 +996,21 @@ class CffFusion():
         # get genes which correspond to 5' and 3' breakpoints (i.e. pos1 and pos2, respectively)
         # return a list of GeneBed objects corresponding to intersecting genes 
         matched_genes1 = gene_ann.map_pos_to_genes(self.chr1, self.pos1)
-        # If t_gene1 (original name assigned by caller) is in matched_genes list, no need to reannotate
+        # If t_gene1 (original name assigned by caller) is in matched_genes list, no need to reannotate, MAKE SURE TO KEEP ALL MATCHING GENE BED ANNOTATIONS
         try: 
-            idx=[gene.gene_name for gene in matched_genes1].index(self.t_gene1)
-            matched_genes1=[matched_genes1[idx]]
+            gene_names = [gene.gene_name for gene in matched_genes1]
+            matches = [i for i, name in enumerate(gene_names) if name == self.t_gene1]
+            matched_genes1 = [matched_genes1[i] for i in matches]
         except ValueError: pass 
 
         matched_genes2 = gene_ann.map_pos_to_genes(self.chr2, self.pos2)
         try: 
-            idx=[gene.gene_name for gene in matched_genes2].index(self.t_gene2)
-            matched_genes2=[matched_genes2[idx]]
+            gene_names = [gene.gene_name for gene in matched_genes2]
+            matches = [i for i, name in enumerate(gene_names) if name == self.t_gene2]
+            matched_genes2 = [matched_genes2[i] for i in matches]
         except ValueError: pass 
 
+        
 
         a = {} # forward strand gene at pos1
         c = {} # backward strand gene at pos1
@@ -1022,6 +1025,9 @@ class CffFusion():
         #     elif self.strand2 == "+":
         #         self.strand2 = "-"
        
+
+
+
         for gene in matched_genes1:
             if gene.strand == "f":
                 a.setdefault(gene.gene_name, []).append(gene)
